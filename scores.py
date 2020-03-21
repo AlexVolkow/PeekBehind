@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     dataset_size = 33
 
-    base_score_path = "/Users/am.volkov/Documents/scores"
+    base_score_path = "/scores"
     score_type = "signs"
 
     for i in range(1, dataset_size):
