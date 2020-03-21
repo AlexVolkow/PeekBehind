@@ -134,7 +134,7 @@ def detect_post(detection):
     detection["scores"] = np.append(detection["scores"], 0.9)
     shape = detection["masks"].shape
     mask = np.zeros((shape[0], shape[1], 1), dtype=np.uint8)
-    rr, cc = skimage.draw.rectangle((3000, 1835), (3000 + 700, 1835 + 35))
+    rr, cc = skimage.draw.rectangle((3000, 1835), (3000 + 700, 1835 + 33))
     mask[rr, cc, 0] = 1
     detection["masks"] = np.append(detection["masks"], mask, axis=2)
     return detection
