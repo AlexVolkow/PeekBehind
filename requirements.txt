@@ -1,0 +1,11 @@
+scikit_image==0.16.2
+opencv_python==3.4.2.16
+h5py==2.10.0
+scipy==1.1.0
+matplotlib==3.2.0
+numpy==1.18.1
+tensorflow==1.13.1
+Keras==2.3.1
+imgaug==0.4.0
+ipython==7.13.0
+pycocotools==2.0.0
