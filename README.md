@@ -22,7 +22,7 @@ The repository includes:
 [detection](detection.py), 
 [detection_train](detection_train.py)): These files contain definition of detection model
 
-* [scores](scores.py). Script for evaluation measures on test dataset
+* [scores](scores.py), [choose_hyper](choose_hyper.py). Script for evaluation measures on test dataset and choosing hyper parameters
 
 * [road_signs_dt_preprocessing](road_signs_dt_preprocessing.ipynb) This notebook converting an RTDS dataset for instance segmentation
 # Custom mask example
