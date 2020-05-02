@@ -1,11 +1,16 @@
+import os
+
 import cv2
+import imageio
+import matplotlib.pyplot as plt
 import numpy as np
 import skimage.draw
 from skimage.measure import find_contours
-import matplotlib.pyplot as plt
 
+from mask_combainer import poisson_combiner
 from poisson import poisson_edit
 from pyramid_blending import pyramid_blending
+from shift import adjust_shift
 
 cv2.ocl.setUseOpenCL(False)
 
@@ -179,8 +184,11 @@ def peek_behind(main_image, mask, side_image, features, verbose=False):
     if verbose:
         plt.imsave("verbose/transformed.jpg", side_image_transformed.astype(np.uint8))
 
+    #masks, offsets = adjust_shift(main_image, side_image_transformed, mask)
+
     if blending_method == "poisson":
         blending_result = poisson_edit(side_image_transformed, main_image, mask, (0, 0))
+        #blending_result = poisson_combiner(side_image_transformed, main_image, masks, offsets)
     elif blending_method == "pyramid":
         blending_result = pyramid_blending(main_image, side_image_transformed, mask)
     else:
