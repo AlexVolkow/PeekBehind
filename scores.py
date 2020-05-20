@@ -3,8 +3,6 @@ import os.path
 
 import cv2
 import numpy as np
-from keras.applications.inception_v3 import InceptionV3
-from keras.applications.inception_v3 import preprocess_input
 from numpy import asarray
 from numpy import cov
 from numpy import iscomplexobj
@@ -14,6 +12,8 @@ from skimage.io import imread
 from skimage.measure import compare_ssim
 from skimage.transform import resize
 import matplotlib.pyplot as plt
+
+from scipy.stats import wilcoxon, ttest_rel
 
 
 # scale an array of images to a new size
@@ -54,44 +54,50 @@ def calculate_fid(model, images1, images2):
 
 
 # prepare the inception v3 model
-model = InceptionV3(include_top=False, pooling='avg', input_shape=(300, 300, 3))
+# model = InceptionV3(include_top=False, pooling='avg', input_shape=(300, 300, 3))
 
+#
+# def calculate_metric_fid(images1, images2):
+#     # convert integer to floating point values
+#     transformer = lambda img: imread(img).astype('float32')
+#
+#     images1 = np.array([transformer(img) for img in images1.values()])
+#     images2 = np.array([transformer(img["origin"]) for img in images2.values()])
+#     # resize images
+#     images1 = scale_images(images1, (300, 300, 3))
+#     images2 = scale_images(images2, (300, 300, 3))
+#     print('Scaled', images1.shape, images2.shape)
+#     # pre-process images
+#     images1 = preprocess_input(images1)
+#     images2 = preprocess_input(images2)
+#     # calculate fid
+#     return calculate_fid(model, images1, images2)
 
-def calculate_metric_fid(images1, images2):
-    # convert integer to floating point values
-    transformer = lambda img: imread(img).astype('float32')
-
-    images1 = np.array([transformer(img) for img in images1.values()])
-    images2 = np.array([transformer(img["origin"]) for img in images2.values()])
-    # resize images
-    images1 = scale_images(images1, (300, 300, 3))
-    images2 = scale_images(images2, (300, 300, 3))
-    print('Scaled', images1.shape, images2.shape)
-    # pre-process images
-    images1 = preprocess_input(images1)
-    images2 = preprocess_input(images2)
-    # calculate fid
-    return calculate_fid(model, images1, images2)
 
 from itertools import groupby
+
 
 def calculate_metric_ssmi(images1, images2):
     ssim = 0
     counter = 0
+    values = []
     for key, value in images1.items():
         img1_path = images1[key]
         img2_path = images2[key]["origin"]
         score_mask = images2[key]["score_mask"]
         pixels, c_ssim = calculate_ssim(img1_path, img2_path, score_mask)
-        ssim += c_ssim * pixels
-        counter += pixels
+        ssim += c_ssim
+        values.append(c_ssim)
+        counter += 1
 
-    return ssim / counter
+    return values, ssim / counter
 
 
 def calculate_metric_psnr(images1, images2):
     psnr = 0
     counter = 0
+    values = []
+
     for key, value in images1.items():
         img1_path = images1[key]
         img2_path = images2[key]["origin"]
@@ -111,10 +117,11 @@ def calculate_metric_psnr(images1, images2):
         grayA = get_segment_crop(grayA, mask=grayMask)
         grayB = get_segment_crop(grayB, mask=grayMask)
 
-        size = grayB.shape[0] * grayB.shape[1]
-        psnr += cv2.PSNR(grayB, grayA) * size
-        counter += size
-    return psnr / counter
+        cv__psnr = cv2.PSNR(grayB, grayA)
+        psnr += cv__psnr
+        values.append(cv__psnr)
+        counter += 1
+    return values, psnr / counter
 
 
 def calculate_metric_l1(images1, images2):
@@ -122,6 +129,9 @@ def calculate_metric_l1(images1, images2):
     counter = 0
     all = 0
     result = 0
+
+    values = []
+
     for key, value in images1.items():
         img1_path = images1[key]
         img2_path = images2[key]["origin"]
@@ -141,14 +151,13 @@ def calculate_metric_l1(images1, images2):
         grayA = get_segment_crop(grayA, mask=grayMask)
         grayB = get_segment_crop(grayB, mask=grayMask)
 
-        size = grayB.shape[0] * grayB.shape[1]
-
         b = grayB - grayA
         l1 += np.linalg.norm(b, ord=1)
         all += np.linalg.norm(grayB, ord=1)
-        result += (np.linalg.norm(b, ord=1) / np.linalg.norm(grayB, ord=1)) * size
-        counter += size
-    return (result / counter) * 100
+        result += (np.linalg.norm(b, ord=1) / np.linalg.norm(grayB, ord=1))
+        values.append(np.linalg.norm(b, ord=1) / np.linalg.norm(grayB, ord=1) * 100)
+        counter += 1
+    return values, (result / counter) * 100
 
 
 def calculate_ssim(img1, img2, score_mask):
@@ -167,7 +176,7 @@ def calculate_ssim(img1, img2, score_mask):
     grayB = get_segment_crop(grayB, mask=grayMask)
 
     (score, diff) = compare_ssim(grayA, grayB, full=True)
-    print("Pixels: {}, Score: {}".format(grayB.shape[0] * grayB.shape[1], score))
+    # print("Pixels: {}, Score: {}".format(grayB.shape[0] * grayB.shape[1], score))
     return grayB.shape[0] * grayB.shape[1], score
 
 
@@ -187,7 +196,7 @@ def already_scores(log, module, result_img, case):
 
 if __name__ == '__main__':
     modules = {
-     "ours": "target_result.jpg",
+        "ours": "target_result.jpg",
         "criminisi": "output.jpg",
         "deep": "output.jpg",
         "generative": "output.jpg",
@@ -204,22 +213,48 @@ if __name__ == '__main__':
 
     log_writer = open("scores.txt", "a+")
 
-    dataset_size = 33
+    dataset_size = 10
 
     base_score_path = "/Users/am.volkov/Documents/scores"
-    score_type = "cars"
+    score_type = "bus"
+
+    scores = {
+        "ours": {
+            "ssmi": [],
+            "psnr": [],
+            "l1": []
+        },
+        "criminisi": {
+            "ssmi": [],
+            "psnr": [],
+            "l1": []
+        },
+        "deep": {
+            "ssmi": [],
+            "psnr": [],
+            "l1": []
+        },
+        "generative": {
+            "ssmi": [],
+            "psnr": [],
+            "l1": []
+        },
+    }
 
     for i in range(1, dataset_size):
         case = str(i)
 
         case_path = os.path.join(base_score_path, score_type, case)
         if not os.path.exists(case_path):
+            print("No file " + case_path)
             continue
 
         origin_image_path = os.path.join(case_path, "source_truth.jpg")
         score_mask_path = os.path.join(case_path, "score_mask.png")
 
         if not os.path.exists(origin_image_path):
+            print("No file " + origin_image_path)
+
             continue
 
         if not os.path.exists(score_mask_path):
@@ -241,24 +276,37 @@ if __name__ == '__main__':
     for module in modules_files:
         images = modules_files[module]
 
-        # fid = calculate_metric_fid(images, truth)
-        # log_message = "Type: {}, Module: {}, FID: {}".format(score_type, module, fid)
-        # print(log_message)
-        # log_writer.write(log_message + "\n")
-
-        ssmi = calculate_metric_ssmi(images, truth)
+        ssmi_values, ssmi = calculate_metric_ssmi(images, truth)
         log_message = "Type: {}, Module: {}, SSMI: {}".format(score_type, module, ssmi)
         print(log_message)
         log_writer.write(log_message + "\n")
+        scores[module]["ssmi"] = ssmi_values
 
-        psnr = calculate_metric_psnr(images, truth)
+        psnr_values, psnr = calculate_metric_psnr(images, truth)
         log_message = "Type: {}, Module: {}, PSNR: {}".format(score_type, module, psnr)
         print(log_message)
         log_writer.write(log_message + "\n")
+        scores[module]["psnr"] = psnr_values
 
-        l1 = calculate_metric_l1(images, truth)
+        l1_values, l1 = calculate_metric_l1(images, truth)
         log_message = "Type: {}, Module: {}, L1: {} %".format(score_type, module, l1)
         print(log_message)
         log_writer.write(log_message + "\n")
+        scores[module]["l1"] = l1_values
 
         log_writer.flush()
+
+    ours = scores["ours"]
+    print("N: {}".format(len(ours["ssmi"])))
+    for module in ["criminisi", "deep", "generative"]:
+        for mera in ["psnr", "ssmi", "l1"]:
+            print("Module: {}, Mera: {}".format(module, mera))
+            stat, p = wilcoxon(scores[module][mera], ours[mera])
+            _, p2 = ttest_rel(scores[module][mera], ours[mera])
+            print('Statistics=%.10f, p=%.10f' % (stat, p))
+
+    for module in ["criminisi", "deep", "generative", "ours"]:
+        for mera in ["psnr", "ssmi", "l1"]:
+            print("Module: {}, Mera: {}".format(module, mera))
+            var = np.sqrt(np.var(scores[module][mera]))
+            print('Var=%.10f' % (2 * var))
