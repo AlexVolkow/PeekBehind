@@ -3,7 +3,7 @@ opencv_python==3.4.2.16
 h5py==2.10.0
 scipy==1.1.0
 matplotlib==3.2.0
-numpy==1.18.1
+numpy==1.22.0
 tensorflow==1.15.2
 Keras==2.3.1
 imgaug==0.4.0
